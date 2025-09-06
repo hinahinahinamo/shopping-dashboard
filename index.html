@@ -204,7 +204,7 @@
             let chart;
             let localItems = [];
 
-            dateInput.value = new date().toISOString().split('T')[0];
+            dateInput.value = new Date().toISOString().split('T')[0];
             
             async function initializeUser() {
                 currentUserId = localStorage.getItem('shoppingDashboardUserId');
@@ -258,7 +258,7 @@
 
             const renderHistory = () => {
                 historyTable.innerHTML = '';
-                const recentItems = [...localItems].sort((a,b) => (b.createdAt?.toDate() || new date(b.date)) - (a.createdAt?.toDate() || new date(a.date)));
+                const recentItems = [...localItems].sort((a,b) => (b.createdAt?.toDate() || new Date(b.date)) - (a.createdAt?.toDate() || new Date(a.date)));
                 recentItems.forEach((item) => {
                     const row = document.createElement('tr');
                     row.innerHTML = `<td class="px-3 py-2 whitespace-nowrap"><div class="text-sm font-medium text-gray-900">${item.name}</div><div class="text-xs text-gray-500">${item.date}</div></td><td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">¥${item.price.toLocaleString()}</td><td class="px-3 py-2 whitespace-nowrap text-right text-sm font-medium"><button class="text-red-600 hover:text-red-900" data-id="${item.id}">削除</button></td>`;
@@ -321,7 +321,7 @@
                 const selectedItemName = itemSelect.value;
                 if (chart) chart.destroy();
                 if (!selectedItemName) return;
-                const itemData = localItems.filter(item => item.name === selectedItemName).sort((a, b) => new date(a.date) - new date(b.date));
+                const itemData = localItems.filter(item => item.name === selectedItemName).sort((a, b) => new Date(a.date) - new Date(b.date));
                 const labels = itemData.map(item => item.date);
                 const data = itemData.map(item => item.price);
                 const ctx = document.getElementById('price-chart').getContext('2d');
@@ -338,9 +338,9 @@
                 if (newItem.name && !isNaN(newItem.price)) {
                     try {
                         const itemsCollectionRef = collection(db, "users", currentUserId, "items");
-                        await addDoc(itemsCollectione, newItem);
+                        await addDoc(itemsCollectionRef, newItem);
                         itemForm.reset();
-                        dateInput.value = new date().toISOString().split('T')[0];
+                        dateInput.value = new Date().toISOString().split('T')[0];
                     } catch (error) {
                         console.error("Error adding document: ", error);
                         alert("データの保存に失敗しました。");
