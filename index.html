@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>食材価格トラッキング・ダッシュボード</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .chart-container {
+            position: relative;
+            height: 40vh;
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">食材価格トラッキング・ダッシュボード</h1>
+            <p class="text-gray-600 mt-2">日々の買い物を記録して、賢く節約しましょう。</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- ===== 入力・履歴セクション ===== -->
+            <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
+                <h2 class="text-xl font-bold mb-4 border-b pb-2">買い物データを入力</h2>
+                <form id="item-form" class="space-y-4">
+                    <div>
+                        <label for="date" class="block text-sm font-medium text-gray-700">購入日</label>
+                        <input type="date" id="date" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required>
+                    </div>
+                    <div>
+                        <label for="item-name" class="block text-sm font-medium text-gray-700">品目名</label>
+                        <input type="text" id="item-name" placeholder="例: じゃがいも" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required>
+                    </div>
+                    <div>
+                        <label for="price" class="block text-sm font-medium text-gray-700">価格（円）</label>
+                        <input type="number" id="price" placeholder="例: 198" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required>
+                    </div>
+                     <div>
+                        <label for="store-name" class="block text-sm font-medium text-gray-700">スーパー名</label>
+                        <input type="text" id="store-name" placeholder="例: ○○スーパー" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors duration-300">
+                        記録する
+                    </button>
+                </form>
+
+                <hr class="my-6">
+                
+                <h2 class="text-xl font-bold mb-4 border-b pb-2">購入履歴</h2>
+                <div class="h-64 overflow-y-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">品目</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">価格</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table" class="bg-white divide-y divide-gray-200">
+                            <!-- 履歴はここに表示されます -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ===== ダッシュボードセクション ===== -->
+            <div class="lg:col-span-2 space-y-8">
+                <!-- サマリー -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div class="bg-white p-4 rounded-xl shadow-lg text-center">
+                        <h3 class="text-sm font-medium text-gray-500">記録アイテム数</h3>
+                        <p id="total-items" class="mt-1 text-3xl font-semibold text-gray-900">0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-lg text-center">
+                        <h3 class="text-sm font-medium text-gray-500">ユニーク品目数</h3>
+                        <p id="unique-items" class="mt-1 text-3xl font-semibold text-gray-900">0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-lg text-center">
+                        <h3 class="text-sm font-medium text-gray-500">総支出額</h3>
+                        <p id="total-spending" class="mt-1 text-3xl font-semibold text-gray-900">¥0</p>
+                    </div>
+                </div>
+
+                <!-- 価格推移グラフ -->
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold">価格推移</h2>
+                        <div>
+                            <label for="item-select" class="sr-only">品目を選択</label>
+                            <select id="item-select" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="price-chart"></canvas>
+                    </div>
+                </div>
+
+                <!-- 最安値情報 -->
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h2 class="text-xl font-bold mb-4">品目別 最安値リスト</h2>
+                    <div id="min-price-list" class="space-y-2 max-h-48 overflow-y-auto">
+                        <!-- 最安値情報がここに表示されます -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const itemForm = document.getElementById('item-form');
+            const dateInput = document.getElementById('date');
+            const itemNameInput = document.getElementById('item-name');
+            const priceInput = document.getElementById('price');
+            const storeNameInput = document.getElementById('store-name');
+            const historyTable = document.getElementById('history-table');
+            const itemSelect = document.getElementById('item-select');
+            
+            const totalItemsEl = document.getElementById('total-items');
+            const uniqueItemsEl = document.getElementById('unique-items');
+            const totalSpendingEl = document.getElementById('total-spending');
+            const minPriceListEl = document.getElementById('min-price-list');
+
+            let chart;
+            let items = JSON.parse(localStorage.getItem('shoppingItems')) || [];
+
+            // 今日の日付をデフォルトで設定
+            dateInput.value = new Date().toISOString().split('T')[0];
+
+            const saveData = () => {
+                localStorage.setItem('shoppingItems', JSON.stringify(items));
+            };
+
+            const renderHistory = () => {
+                historyTable.innerHTML = '';
+                const recentItems = [...items].sort((a,b) => new Date(b.date) - new Date(a.date));
+                
+                recentItems.forEach((item, index) => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="px-3 py-2 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900">${item.name}</div>
+                            <div class="text-xs text-gray-500">${item.date}</div>
+                        </td>
+                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">¥${item.price.toLocaleString()}</td>
+                        <td class="px-3 py-2 whitespace-nowrap text-right text-sm font-medium">
+                            <button class="text-red-600 hover:text-red-900" data-id="${item.id}">削除</button>
+                        </td>
+                    `;
+                    historyTable.appendChild(row);
+                });
+
+                // 削除ボタンにイベントリスナーを追加
+                historyTable.querySelectorAll('button').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        const idToDelete = e.target.dataset.id;
+                        items = items.filter(item => item.id !== idToDelete);
+                        saveData();
+                        renderAll();
+                    });
+                });
+            };
+            
+            const renderSummary = () => {
+                totalItemsEl.textContent = items.length;
+                const uniqueItemNames = new Set(items.map(item => item.name));
+                uniqueItemsEl.textContent = uniqueItemNames.size;
+                const totalSpending = items.reduce((sum, item) => sum + item.price, 0);
+                totalSpendingEl.textContent = `¥${totalSpending.toLocaleString()}`;
+            };
+
+            const renderMinPriceList = () => {
+                minPriceListEl.innerHTML = '';
+                const uniqueItemNames = [...new Set(items.map(item => item.name))];
+                
+                uniqueItemNames.forEach(name => {
+                    const itemsOfName = items.filter(item => item.name === name);
+                    const minPriceItem = itemsOfName.reduce((min, item) => item.price < min.price ? item : min);
+                    
+                    const el = document.createElement('div');
+                    el.className = 'flex justify-between items-center bg-gray-50 p-2 rounded-md';
+                    el.innerHTML = `
+                        <div>
+                            <p class="font-semibold text-gray-800">${name}</p>
+                            <p class="text-xs text-gray-500">${minPriceItem.date} at ${minPriceItem.store || 'お店不明'}</p>
+                        </div>
+                        <p class="font-bold text-lg text-indigo-600">¥${minPriceItem.price.toLocaleString()}</p>
+                    `;
+                    minPriceListEl.appendChild(el);
+                });
+            };
+
+            const updateItemSelector = () => {
+                const uniqueItemNames = [...new Set(items.map(item => item.name))].sort();
+                const currentSelection = itemSelect.value;
+                itemSelect.innerHTML = '';
+                uniqueItemNames.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    itemSelect.appendChild(option);
+                });
+                if (uniqueItemNames.includes(currentSelection)) {
+                    itemSelect.value = currentSelection;
+                }
+            };
+            
+            const renderChart = () => {
+                const selectedItemName = itemSelect.value;
+                if (!selectedItemName) {
+                    if(chart) chart.destroy();
+                    return;
+                }
+
+                const itemData = items
+                    .filter(item => item.name === selectedItemName)
+                    .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                const labels = itemData.map(item => item.date);
+                const data = itemData.map(item => item.price);
+
+                const ctx = document.getElementById('price-chart').getContext('2d');
+                if (chart) {
+                    chart.destroy();
+                }
+                chart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: `${selectedItemName} の価格`,
+                            data: data,
+                            borderColor: 'rgb(79, 70, 229)',
+                            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                            fill: true,
+                            tension: 0.1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: false,
+                                ticks: {
+                                    callback: function(value) {
+                                        return '¥' + value.toLocaleString();
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `価格: ¥${context.parsed.y.toLocaleString()}`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            };
+
+            const renderAll = () => {
+                renderHistory();
+                renderSummary();
+                renderMinPriceList();
+                updateItemSelector();
+                renderChart();
+            };
+
+            itemForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const newItem = {
+                    id: Date.now().toString(),
+                    date: dateInput.value,
+                    name: itemNameInput.value.trim(),
+                    price: parseInt(priceInput.value),
+                    store: storeNameInput.value.trim()
+                };
+
+                if (newItem.name && !isNaN(newItem.price)) {
+                    items.push(newItem);
+                    saveData();
+                    renderAll();
+                    itemForm.reset();
+                    dateInput.value = new Date().toISOString().split('T')[0];
+                }
+            });
+
+            itemSelect.addEventListener('change', renderChart);
+
+            // 初期表示
+            renderAll();
+        });
+    </script>
+</body>
+</html>
