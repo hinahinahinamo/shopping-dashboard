@@ -3,22 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>食材価格トラッキング・ダッシュボード</title>
+    <title>食材価格トラッキング・ダッシュボード (クラウド対応版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
+        body { font-family: 'Inter', sans-serif; }
+        .chart-container { position: relative; height: 40vh; width: 100%; }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #4f46e5;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
         }
-        .chart-container {
-            position: relative;
-            height: 40vh;
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.8);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 1rem;
         }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
+
+    <div id="loading-overlay">
+        <div class="flex items-center">
+            <div class="loader"></div>
+            <p class="ml-4 text-gray-700">データベースに接続中...</p>
+        </div>
+    </div>
 
     <div class="container mx-auto p-4 md:p-8">
         <header class="text-center mb-8">
@@ -114,8 +137,40 @@
         </main>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, collection, addDoc, query, onSnapshot, doc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+          apiKey: "AIzaSyCEfuv2gtUZwTT7TNSHMan6Omi5TMSBLOU",
+          authDomain: "shopping-dashboard-app.firebaseapp.com",
+          projectId: "shopping-dashboard-app",
+          storageBucket: "shopping-dashboard-app.appspot.com",
+          messagingSenderId: "352515834159",
+          appId: "1:352515834159:web:a0e58334e05feaabbd61da"
+        };
+
+        const loadingOverlay = document.getElementById('loading-overlay');
+
+        // ★★★ Firebase設定チェック ★★★
+        if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("SyX")) {
+             loadingOverlay.innerHTML = `
+                <div class="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg max-w-lg text-center shadow-md">
+                    <h3 class="font-bold text-lg">Firebaseの設定エラー</h3>
+                    <p class="mt-1">FirebaseのAPIキーが設定されていません。</p>
+                    <p class="mt-2 text-sm text-left">
+                        <b>解決方法:</b><br>
+                        1. <code>index.html</code>ファイルを開きます。<br>
+                        2. <code>firebaseConfig</code>と書かれた部分を探します。<br>
+                        3. Firebaseコンソールからコピーしたあなたの設定情報に、その部分を丸ごと置き換えてください。
+                    </p>
+                </div>
+            `;
+        } else {
+            // --- DOM Elements ---
             const itemForm = document.getElementById('item-form');
             const dateInput = document.getElementById('date');
             const itemNameInput = document.getElementById('item-name');
@@ -123,27 +178,72 @@
             const storeNameInput = document.getElementById('store-name');
             const historyTable = document.getElementById('history-table');
             const itemSelect = document.getElementById('item-select');
-            
             const totalItemsEl = document.getElementById('total-items');
             const uniqueItemsEl = document.getElementById('unique-items');
             const totalSpendingEl = document.getElementById('total-spending');
             const minPriceListEl = document.getElementById('min-price-list');
 
+            // Initialize Firebase
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+
+            let currentUserId = null;
+            let itemsUnsubscribe = null; // リアルタイムリスナーを解除するための変数
             let chart;
-            let items = JSON.parse(localStorage.getItem('shoppingItems')) || [];
+            let localItems = [];
 
             // 今日の日付をデフォルトで設定
             dateInput.value = new Date().toISOString().split('T')[0];
+            
+            // --- Firebase Authentication ---
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    currentUserId = user.uid;
+                    setupRealtimeListener(currentUserId);
+                } else {
+                    signInAnonymously(auth).catch((error) => {
+                        console.error("Anonymous sign-in failed:", error);
+                        loadingOverlay.innerHTML = `<p class="text-red-600">データベースへの接続に失敗しました。ページをリロードしてください。</p>`
+                    });
+                }
+            });
 
-            const saveData = () => {
-                localStorage.setItem('shoppingItems', JSON.stringify(items));
+            // --- Firestore Realtime Listener ---
+            function setupRealtimeListener(userId) {
+                if (itemsUnsubscribe) {
+                    itemsUnsubscribe();
+                }
+                const itemsCollectionRef = collection(db, "users", userId, "items");
+                const q = query(itemsCollectionRef);
+
+                itemsUnsubscribe = onSnapshot(q, (querySnapshot) => {
+                    localItems = [];
+                    querySnapshot.forEach((doc) => {
+                        localItems.push({ id: doc.id, ...doc.data() });
+                    });
+                    renderAll();
+                    loadingOverlay.style.display = 'none';
+                }, (error) => {
+                    console.error("Error fetching data from Firestore: ", error);
+                    loadingOverlay.innerHTML = `<p class="text-red-600">データの取得に失敗しました。</p>`
+                });
+            }
+            
+            // --- Data Rendering ---
+            const renderAll = () => {
+                renderHistory();
+                renderSummary();
+                renderMinPriceList();
+                updateItemSelector();
+                renderChart();
             };
 
             const renderHistory = () => {
                 historyTable.innerHTML = '';
-                const recentItems = [...items].sort((a,b) => new Date(b.date) - new Date(a.date));
+                const recentItems = [...localItems].sort((a,b) => (b.createdAt?.toDate() || new Date(b.date)) - (a.createdAt?.toDate() || new Date(a.date)));
                 
-                recentItems.forEach((item, index) => {
+                recentItems.forEach((item) => {
                     const row = document.createElement('tr');
                     row.innerHTML = `
                         <td class="px-3 py-2 whitespace-nowrap">
@@ -158,31 +258,39 @@
                     historyTable.appendChild(row);
                 });
 
-                // 削除ボタンにイベントリスナーを追加
                 historyTable.querySelectorAll('button').forEach(button => {
-                    button.addEventListener('click', (e) => {
+                    button.addEventListener('click', async (e) => {
                         const idToDelete = e.target.dataset.id;
-                        items = items.filter(item => item.id !== idToDelete);
-                        saveData();
-                        renderAll();
+                        // 誤操作防止のため、alertの代わりにカスタムUIを使うのが望ましいですが、ここではconfirmを使用します。
+                        if (window.confirm('このデータを本当に削除しますか？')) {
+                            try {
+                                await deleteDoc(doc(db, "users", currentUserId, "items", idToDelete));
+                            } catch (error) {
+                                console.error("Error removing document: ", error);
+                                alert("データの削除に失敗しました。");
+                            }
+                        }
                     });
                 });
             };
             
             const renderSummary = () => {
-                totalItemsEl.textContent = items.length;
-                const uniqueItemNames = new Set(items.map(item => item.name));
+                totalItemsEl.textContent = localItems.length;
+                const uniqueItemNames = new Set(localItems.map(item => item.name));
                 uniqueItemsEl.textContent = uniqueItemNames.size;
-                const totalSpending = items.reduce((sum, item) => sum + item.price, 0);
+                const totalSpending = localItems.reduce((sum, item) => sum + Number(item.price), 0);
                 totalSpendingEl.textContent = `¥${totalSpending.toLocaleString()}`;
             };
 
             const renderMinPriceList = () => {
                 minPriceListEl.innerHTML = '';
-                const uniqueItemNames = [...new Set(items.map(item => item.name))];
+                const uniqueItemNames = [...new Set(localItems.map(item => item.name))];
                 
                 uniqueItemNames.forEach(name => {
-                    const itemsOfName = items.filter(item => item.name === name);
+                    if (!name) return;
+                    const itemsOfName = localItems.filter(item => item.name === name);
+                    if (itemsOfName.length === 0) return;
+
                     const minPriceItem = itemsOfName.reduce((min, item) => item.price < min.price ? item : min);
                     
                     const el = document.createElement('div');
@@ -199,9 +307,9 @@
             };
 
             const updateItemSelector = () => {
-                const uniqueItemNames = [...new Set(items.map(item => item.name))].sort();
+                const uniqueItemNames = [...new Set(localItems.map(item => item.name))].sort();
                 const currentSelection = itemSelect.value;
-                itemSelect.innerHTML = '';
+                itemSelect.innerHTML = '<option value="">品目を選択...</option>';
                 uniqueItemNames.forEach(name => {
                     const option = document.createElement('option');
                     option.value = name;
@@ -215,12 +323,14 @@
             
             const renderChart = () => {
                 const selectedItemName = itemSelect.value;
+                if (chart) {
+                    chart.destroy();
+                }
                 if (!selectedItemName) {
-                    if(chart) chart.destroy();
                     return;
                 }
 
-                const itemData = items
+                const itemData = localItems
                     .filter(item => item.name === selectedItemName)
                     .sort((a, b) => new Date(a.date) - new Date(b.date));
 
@@ -228,9 +338,6 @@
                 const data = itemData.map(item => item.price);
 
                 const ctx = document.getElementById('price-chart').getContext('2d');
-                if (chart) {
-                    chart.destroy();
-                }
                 chart = new Chart(ctx, {
                     type: 'line',
                     data: {
@@ -247,61 +354,43 @@
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: false,
-                                ticks: {
-                                    callback: function(value) {
-                                        return '¥' + value.toLocaleString();
-                                    }
-                                }
-                            }
-                        },
-                        plugins: {
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        return `価格: ¥${context.parsed.y.toLocaleString()}`;
-                                    }
-                                }
-                            }
-                        }
+                        scales: { y: { beginAtZero: false, ticks: { callback: value => '¥' + value.toLocaleString() } } },
+                        plugins: { tooltip: { callbacks: { label: context => `価格: ¥${context.parsed.y.toLocaleString()}` } } }
                     }
                 });
             };
 
-            const renderAll = () => {
-                renderHistory();
-                renderSummary();
-                renderMinPriceList();
-                updateItemSelector();
-                renderChart();
-            };
-
-            itemForm.addEventListener('submit', (e) => {
+            // --- Event Listeners ---
+            itemForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
+                if (!currentUserId) {
+                    alert("ユーザー情報が取得できていません。少し待ってから再試行してください。");
+                    return;
+                }
                 const newItem = {
-                    id: Date.now().toString(),
                     date: dateInput.value,
                     name: itemNameInput.value.trim(),
                     price: parseInt(priceInput.value),
-                    store: storeNameInput.value.trim()
+                    store: storeNameInput.value.trim(),
+                    createdAt: serverTimestamp() // 登録日時
                 };
 
                 if (newItem.name && !isNaN(newItem.price)) {
-                    items.push(newItem);
-                    saveData();
-                    renderAll();
-                    itemForm.reset();
-                    dateInput.value = new Date().toISOString().split('T')[0];
+                    try {
+                        const itemsCollectionRef = collection(db, "users", currentUserId, "items");
+                        await addDoc(itemsCollectionRef, newItem);
+                        itemForm.reset();
+                        dateInput.value = new Date().toISOString().split('T')[0];
+                    } catch (error) {
+                        console.error("Error adding document: ", error);
+                        alert("データの保存に失敗しました。");
+                    }
                 }
             });
 
             itemSelect.addEventListener('change', renderChart);
-
-            // 初期表示
-            renderAll();
-        });
+        }
     </script>
 </body>
 </html>
+
