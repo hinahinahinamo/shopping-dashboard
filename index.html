@@ -135,6 +135,24 @@
                 </div>
             </div>
         </main>
+
+        <!-- ★★★ 同期セクション ★★★ -->
+        <div id="sync-section" class="bg-blue-100 border border-blue-300 text-blue-800 p-4 rounded-xl shadow-lg mt-8 lg:col-span-3">
+            <h3 class="font-bold">PCとスマホのデータを同期する</h3>
+            <p class="text-sm mt-2">PCで表示された「マイ同期ID」をスマホで入力すると、同じデータを共有できます。</p>
+            <div class="mt-4">
+                <button id="show-id-btn" class="text-sm bg-blue-500 text-white py-1 px-3 rounded-md hover:bg-blue-600">マイ同期IDを表示</button>
+                <p id="my-id-display" class="mt-2 text-xs font-mono select-all bg-white p-2 rounded" style="display:none;"></p>
+            </div>
+            <div class="mt-4">
+                <label for="sync-id-input" class="text-sm font-medium">同期IDを入力:</label>
+                <div class="flex items-center mt-1">
+                    <input type="text" id="sync-id-input" placeholder="PCのIDをここに貼り付け" class="block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm">
+                    <button id="sync-btn" class="ml-2 bg-green-500 text-white py-1 px-3 rounded-md hover:bg-green-600">同期</button>
+                </div>
+            </div>
+        </div>
+
     </div>
 
     <!-- Firebase SDK -->
@@ -169,6 +187,13 @@
             const uniqueItemsEl = document.getElementById('unique-items');
             const totalSpendingEl = document.getElementById('total-spending');
             const minPriceListEl = document.getElementById('min-price-list');
+            
+            // ★★★ 同期UIの要素 ★★★
+            const showIdBtn = document.getElementById('show-id-btn');
+            const myIdDisplay = document.getElementById('my-id-display');
+            const syncIdInput = document.getElementById('sync-id-input');
+            const syncBtn = document.getElementById('sync-btn');
+
 
             const app = initializeApp(firebaseConfig);
             const auth = getAuth(app);
@@ -179,9 +204,8 @@
             let chart;
             let localItems = [];
 
-            dateInput.value = new Date().toISOString().split('T')[0];
+            dateInput.value = new date().toISOString().split('T')[0];
             
-            // --- ★★★ 認証ロジックの変更 ★★★ ---
             async function initializeUser() {
                 currentUserId = localStorage.getItem('shoppingDashboardUserId');
 
@@ -203,9 +227,8 @@
                 }
             }
 
-            initializeUser(); // 認証処理を開始
+            initializeUser();
 
-            // --- Firestore Realtime Listener ---
             function setupRealtimeListener(userId) {
                 if (itemsUnsubscribe) itemsUnsubscribe();
                 
@@ -235,7 +258,7 @@
 
             const renderHistory = () => {
                 historyTable.innerHTML = '';
-                const recentItems = [...localItems].sort((a,b) => (b.createdAt?.toDate() || new Date(b.date)) - (a.createdAt?.toDate() || new Date(a.date)));
+                const recentItems = [...localItems].sort((a,b) => (b.createdAt?.toDate() || new date(b.date)) - (a.createdAt?.toDate() || new date(a.date)));
                 recentItems.forEach((item) => {
                     const row = document.createElement('tr');
                     row.innerHTML = `<td class="px-3 py-2 whitespace-nowrap"><div class="text-sm font-medium text-gray-900">${item.name}</div><div class="text-xs text-gray-500">${item.date}</div></td><td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">¥${item.price.toLocaleString()}</td><td class="px-3 py-2 whitespace-nowrap text-right text-sm font-medium"><button class="text-red-600 hover:text-red-900" data-id="${item.id}">削除</button></td>`;
@@ -244,7 +267,7 @@
                 historyTable.querySelectorAll('button').forEach(button => {
                     button.addEventListener('click', async (e) => {
                         const idToDelete = e.target.dataset.id;
-                        if (window.confirm('このデータを本当に削除しますか？')) {
+                        if (confirm('このデータを本当に削除しますか？')) {
                             try {
                                 await deleteDoc(doc(db, "users", currentUserId, "items", idToDelete));
                             } catch (error) {
@@ -298,7 +321,7 @@
                 const selectedItemName = itemSelect.value;
                 if (chart) chart.destroy();
                 if (!selectedItemName) return;
-                const itemData = localItems.filter(item => item.name === selectedItemName).sort((a, b) => new Date(a.date) - new Date(b.date));
+                const itemData = localItems.filter(item => item.name === selectedItemName).sort((a, b) => new date(a.date) - new date(b.date));
                 const labels = itemData.map(item => item.date);
                 const data = itemData.map(item => item.price);
                 const ctx = document.getElementById('price-chart').getContext('2d');
@@ -315,9 +338,9 @@
                 if (newItem.name && !isNaN(newItem.price)) {
                     try {
                         const itemsCollectionRef = collection(db, "users", currentUserId, "items");
-                        await addDoc(itemsCollectionRef, newItem);
+                        await addDoc(itemsCollectione, newItem);
                         itemForm.reset();
-                        dateInput.value = new Date().toISOString().split('T')[0];
+                        dateInput.value = new date().toISOString().split('T')[0];
                     } catch (error) {
                         console.error("Error adding document: ", error);
                         alert("データの保存に失敗しました。");
@@ -326,8 +349,32 @@
             });
 
             itemSelect.addEventListener('change', renderChart);
+            
+            // ★★★ 同期UIのイベントリスナー ★★★
+            showIdBtn.addEventListener('click', () => {
+                if (currentUserId) {
+                    myIdDisplay.textContent = currentUserId;
+                    myIdDisplay.style.display = 'block';
+                } else {
+                    alert("ユーザーIDがまだ取得できていません。少し待ってからもう一度お試しください。");
+                }
+            });
+
+            syncBtn.addEventListener('click', () => {
+                const newId = syncIdInput.value.trim();
+                if (newId && newId.length > 20) { // 簡単なIDの検証
+                    if (confirm(`現在のスマホ上のデータは表示されなくなります。新しいIDとデータを同期しますか？`)) {
+                        localStorage.setItem('shoppingDashboardUserId', newId);
+                        alert("同期しました。ページを再読み込みします。");
+                        location.reload();
+                    }
+                } else {
+                    alert("有効な同期IDを入力してください。");
+                }
+            });
         }
     </script>
 </body>
 </html>
+
 
