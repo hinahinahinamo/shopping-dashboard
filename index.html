@@ -136,7 +136,7 @@
             </div>
         </main>
 
-        <!-- ★★★ 同期セクション ★★★ -->
+        <!-- 同期セクション -->
         <div id="sync-section" class="bg-blue-100 border border-blue-300 text-blue-800 p-4 rounded-xl shadow-lg mt-8 lg:col-span-3">
             <h3 class="font-bold">PCとスマホのデータを同期する</h3>
             <p class="text-sm mt-2">PCで表示された「マイ同期ID」をスマホで入力すると、同じデータを共有できます。</p>
@@ -158,7 +158,8 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        // onAuthStateChanged をインポートに追加します
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
         import { getFirestore, collection, addDoc, query, onSnapshot, doc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
         // Your web app's Firebase configuration
@@ -173,7 +174,7 @@
 
         const loadingOverlay = document.getElementById('loading-overlay');
 
-        if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("SyX")) {
+        if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("AIzaSyA")) {
              loadingOverlay.innerHTML = `<div class="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg max-w-lg text-center shadow-md"><h3 class="font-bold text-lg">Firebaseの設定エラー</h3><p class="mt-1">FirebaseのAPIキーが設定されていません。</p><p class="mt-2 text-sm text-left"><b>解決方法:</b><br>1. <code>index.html</code>ファイルを開きます。<br>2. <code>firebaseConfig</code>と書かれた部分を探します。<br>3. Firebaseコンソールからコピーしたあなたの設定情報に、その部分を丸ごと置き換えてください。</p></div>`;
         } else {
             const itemForm = document.getElementById('item-form');
@@ -188,12 +189,10 @@
             const totalSpendingEl = document.getElementById('total-spending');
             const minPriceListEl = document.getElementById('min-price-list');
             
-            // ★★★ 同期UIの要素 ★★★
             const showIdBtn = document.getElementById('show-id-btn');
             const myIdDisplay = document.getElementById('my-id-display');
             const syncIdInput = document.getElementById('sync-id-input');
             const syncBtn = document.getElementById('sync-btn');
-
 
             const app = initializeApp(firebaseConfig);
             const auth = getAuth(app);
@@ -206,28 +205,40 @@
 
             dateInput.value = new Date().toISOString().split('T')[0];
             
-            async function initializeUser() {
-                currentUserId = localStorage.getItem('shoppingDashboardUserId');
-
-                if (currentUserId) {
-                    console.log("Saved user ID found:", currentUserId);
-                    setupRealtimeListener(currentUserId);
-                } else {
-                    console.log("No saved user ID. Signing in anonymously...");
-                    try {
-                        const userCredential = await signInAnonymously(auth);
-                        currentUserId = userCredential.user.uid;
+            // ★★★ 修正箇所 ★★★
+            // onAuthStateChanged を使用して、認証状態が確定してからデータ処理を開始します。
+            // これにより、モバイルでのリロード時のエラーを防ぎます。
+            onAuthStateChanged(auth, (user) => {
+                if (user) {
+                    // ユーザーが認証された状態 (リロード後のセッション復元も含む)
+                    console.log("User authenticated with UID:", user.uid);
+                    
+                    // 同期機能のために、localStorageに保存されたIDを優先的に使用します
+                    const targetUserId = localStorage.getItem('shoppingDashboardUserId');
+                    
+                    if (targetUserId) {
+                        currentUserId = targetUserId;
+                        console.log("Using target ID from localStorage:", currentUserId);
+                    } else {
+                        // localStorageにIDがなければ、現在の認証ユーザーのIDを使用し、保存します
+                        currentUserId = user.uid;
                         localStorage.setItem('shoppingDashboardUserId', currentUserId);
-                        console.log("New user ID created and saved:", currentUserId);
-                        setupRealtimeListener(currentUserId);
-                    } catch (error) {
-                        console.error("Anonymous sign-in failed:", error);
-                        loadingOverlay.innerHTML = `<p class="text-red-600">データベースへの接続に失敗しました。ページをリロードしてください。</p>`
+                        console.log("No ID in localStorage. Using current user and saving:", currentUserId);
                     }
-                }
-            }
+                    
+                    // データベースとの接続を開始します
+                    setupRealtimeListener(currentUserId);
 
-            initializeUser();
+                } else {
+                    // ユーザーが認証されていない場合、匿名でサインインします
+                    console.log("User not authenticated. Signing in anonymously...");
+                    signInAnonymously(auth).catch((error) => {
+                        console.error("Anonymous sign-in failed:", error);
+                        loadingOverlay.innerHTML = `<p class="text-red-600">データベースへの接続に失敗しました。ページをリロードしてください。</p>`;
+                    });
+                }
+            });
+
 
             function setupRealtimeListener(userId) {
                 if (itemsUnsubscribe) itemsUnsubscribe();
@@ -244,7 +255,8 @@
                     loadingOverlay.style.display = 'none';
                 }, (error) => {
                     console.error("Error fetching data from Firestore: ", error);
-                    loadingOverlay.innerHTML = `<p class="text-red-600">データの取得に失敗しました。</p>`
+                    // エラーメッセージをより具体的にします
+                    loadingOverlay.innerHTML = `<div class="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg max-w-lg text-center shadow-md"><h3 class="font-bold text-lg">データの取得に失敗しました</h3><p class="mt-1">指定されたIDのデータにアクセスする権限がない可能性があります。</p><p class="mt-2 text-sm">PCとIDを同期した後このエラーが出る場合、Firebaseのセキュリティルールの設定が必要な場合があります。</p></div>`;
                 });
             }
             
@@ -350,7 +362,6 @@
 
             itemSelect.addEventListener('change', renderChart);
             
-            // ★★★ 同期UIのイベントリスナー ★★★
             showIdBtn.addEventListener('click', () => {
                 if (currentUserId) {
                     myIdDisplay.textContent = currentUserId;
@@ -362,10 +373,10 @@
 
             syncBtn.addEventListener('click', () => {
                 const newId = syncIdInput.value.trim();
-                if (newId && newId.length > 20) { // 簡単なIDの検証
-                    if (confirm(`現在のスマホ上のデータは表示されなくなります。新しいIDとデータを同期しますか？`)) {
+                if (newId && newId.length > 20) {
+                    if (confirm(`現在のデバイスのデータは表示されなくなり、入力されたIDのデータに切り替わります。よろしいですか？\n\nID: ${newId}`)) {
                         localStorage.setItem('shoppingDashboardUserId', newId);
-                        alert("同期しました。ページを再読み込みします。");
+                        alert("同期IDを設定しました。ページを再読み込みします。");
                         location.reload();
                     }
                 } else {
@@ -376,5 +387,4 @@
     </script>
 </body>
 </html>
-
 
