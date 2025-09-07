@@ -59,12 +59,27 @@
                         <input type="date" id="date" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required>
                     </div>
                     <div>
-                        <label for="item-name" class="block text-sm font-medium text-gray-700">品目名</label>
-                        <input type="text" id="item-name" placeholder="例: じゃがいも" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required>
+                        <label for="item-name" class="block text-sm font-medium text-gray-700">品目名（カテゴリ）</label>
+                        <input type="text" id="item-name" placeholder="例: 食パン, 牛乳" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required>
+                    </div>
+                    <!-- ★★★ 変更点: 銘柄/詳細の入力欄を追加 ★★★ -->
+                    <div>
+                        <label for="brand-name" class="block text-sm font-medium text-gray-700">銘柄/詳細（任意）</label>
+                        <input type="text" id="brand-name" placeholder="例: ロイヤルブレッド, おいしい牛乳" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                     </div>
                     <div>
                         <label for="price" class="block text-sm font-medium text-gray-700">価格（円）</label>
                         <input type="number" id="price" placeholder="例: 198" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="quantity" class="block text-sm font-medium text-gray-700">数量</label>
+                            <input type="number" id="quantity" value="1" step="any" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label for="unit" class="block text-sm font-medium text-gray-700">単位</label>
+                            <input type="text" id="unit" placeholder="例: 斤, L, g, 本" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
                     </div>
                      <div>
                         <label for="store-name" class="block text-sm font-medium text-gray-700">スーパー名</label>
@@ -83,7 +98,7 @@
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">品目</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">価格</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">価格 (単価)</th>
                                 <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                             </tr>
                         </thead>
@@ -115,7 +130,7 @@
                 <!-- 価格推移グラフ -->
                 <div class="bg-white p-6 rounded-xl shadow-lg">
                     <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-bold">価格推移</h2>
+                        <h2 class="text-xl font-bold">単価推移</h2>
                         <div>
                             <label for="item-select" class="sr-only">品目を選択</label>
                             <select id="item-select" class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"></select>
@@ -128,7 +143,7 @@
 
                 <!-- 最安値情報 -->
                 <div class="bg-white p-6 rounded-xl shadow-lg">
-                    <h2 class="text-xl font-bold mb-4">品目別 最安値リスト</h2>
+                    <h2 class="text-xl font-bold mb-4">品目別 最安値リスト (単価ベース)</h2>
                     <div id="min-price-list" class="space-y-2 max-h-48 overflow-y-auto">
                         <!-- 最安値情報がここに表示されます -->
                     </div>
@@ -158,11 +173,9 @@
     <!-- Firebase SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        // onAuthStateChanged をインポートに追加します
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
         import { getFirestore, collection, addDoc, query, onSnapshot, doc, deleteDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-        // Your web app's Firebase configuration
         const firebaseConfig = {
           apiKey: "AIzaSyCEfuv2gtUZwTT7TNSHMan6Omi5TMSBLOU",
           authDomain: "shopping-dashboard-app.firebaseapp.com",
@@ -175,12 +188,16 @@
         const loadingOverlay = document.getElementById('loading-overlay');
 
         if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes("AIzaSyA")) {
-             loadingOverlay.innerHTML = `<div class="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg max-w-lg text-center shadow-md"><h3 class="font-bold text-lg">Firebaseの設定エラー</h3><p class="mt-1">FirebaseのAPIキーが設定されていません。</p><p class="mt-2 text-sm text-left"><b>解決方法:</b><br>1. <code>index.html</code>ファイルを開きます。<br>2. <code>firebaseConfig</code>と書かれた部分を探します。<br>3. Firebaseコンソールからコピーしたあなたの設定情報に、その部分を丸ごと置き換えてください。</p></div>`;
+             loadingOverlay.innerHTML = `<div class="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg max-w-lg text-center shadow-md"><h3 class="font-bold text-lg">Firebaseの設定エラー</h3><p class="mt-1">FirebaseのAPIキーが設定されていません。</p></div>`;
         } else {
             const itemForm = document.getElementById('item-form');
             const dateInput = document.getElementById('date');
             const itemNameInput = document.getElementById('item-name');
+            // ★★★ 変更点: 新しいUI要素を取得 ★★★
+            const brandNameInput = document.getElementById('brand-name');
             const priceInput = document.getElementById('price');
+            const quantityInput = document.getElementById('quantity');
+            const unitInput = document.getElementById('unit');
             const storeNameInput = document.getElementById('store-name');
             const historyTable = document.getElementById('history-table');
             const itemSelect = document.getElementById('item-select');
@@ -205,58 +222,29 @@
 
             dateInput.value = new Date().toISOString().split('T')[0];
             
-            // ★★★ 修正箇所 ★★★
-            // onAuthStateChanged を使用して、認証状態が確定してからデータ処理を開始します。
-            // これにより、モバイルでのリロード時のエラーを防ぎます。
             onAuthStateChanged(auth, (user) => {
                 if (user) {
-                    // ユーザーが認証された状態 (リロード後のセッション復元も含む)
-                    console.log("User authenticated with UID:", user.uid);
-                    
-                    // 同期機能のために、localStorageに保存されたIDを優先的に使用します
-                    const targetUserId = localStorage.getItem('shoppingDashboardUserId');
-                    
-                    if (targetUserId) {
-                        currentUserId = targetUserId;
-                        console.log("Using target ID from localStorage:", currentUserId);
-                    } else {
-                        // localStorageにIDがなければ、現在の認証ユーザーのIDを使用し、保存します
-                        currentUserId = user.uid;
-                        localStorage.setItem('shoppingDashboardUserId', currentUserId);
-                        console.log("No ID in localStorage. Using current user and saving:", currentUserId);
-                    }
-                    
-                    // データベースとの接続を開始します
+                    const targetUserId = localStorage.getItem('shoppingDashboardUserId') || user.uid;
+                    currentUserId = targetUserId;
+                    localStorage.setItem('shoppingDashboardUserId', currentUserId);
                     setupRealtimeListener(currentUserId);
-
                 } else {
-                    // ユーザーが認証されていない場合、匿名でサインインします
-                    console.log("User not authenticated. Signing in anonymously...");
-                    signInAnonymously(auth).catch((error) => {
-                        console.error("Anonymous sign-in failed:", error);
-                        loadingOverlay.innerHTML = `<p class="text-red-600">データベースへの接続に失敗しました。ページをリロードしてください。</p>`;
-                    });
+                    signInAnonymously(auth).catch((error) => console.error("Anonymous sign-in failed:", error));
                 }
             });
 
-
             function setupRealtimeListener(userId) {
                 if (itemsUnsubscribe) itemsUnsubscribe();
-                
                 const itemsCollectionRef = collection(db, "users", userId, "items");
                 const q = query(itemsCollectionRef);
-
                 itemsUnsubscribe = onSnapshot(q, (querySnapshot) => {
                     localItems = [];
-                    querySnapshot.forEach((doc) => {
-                        localItems.push({ id: doc.id, ...doc.data() });
-                    });
+                    querySnapshot.forEach((doc) => localItems.push({ id: doc.id, ...doc.data() }));
                     renderAll();
                     loadingOverlay.style.display = 'none';
                 }, (error) => {
-                    console.error("Error fetching data from Firestore: ", error);
-                    // エラーメッセージをより具体的にします
-                    loadingOverlay.innerHTML = `<div class="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg max-w-lg text-center shadow-md"><h3 class="font-bold text-lg">データの取得に失敗しました</h3><p class="mt-1">指定されたIDのデータにアクセスする権限がない可能性があります。</p><p class="mt-2 text-sm">PCとIDを同期した後このエラーが出る場合、Firebaseのセキュリティルールの設定が必要な場合があります。</p></div>`;
+                    console.error("Error fetching data: ", error);
+                    loadingOverlay.innerHTML = `<div class="p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg"><h3 class="font-bold">データ取得エラー</h3><p>権限がないか、IDが間違っている可能性があります。</p></div>`;
                 });
             }
             
@@ -268,24 +256,38 @@
                 renderChart();
             };
 
+            // ★★★ 変更点: 履歴表示で銘柄も表示 ★★★
             const renderHistory = () => {
                 historyTable.innerHTML = '';
-                const recentItems = [...localItems].sort((a,b) => (b.createdAt?.toDate() || new Date(b.date)) - (a.createdAt?.toDate() || new Date(a.date)));
+                const recentItems = [...localItems].sort((a,b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
                 recentItems.forEach((item) => {
                     const row = document.createElement('tr');
-                    row.innerHTML = `<td class="px-3 py-2 whitespace-nowrap"><div class="text-sm font-medium text-gray-900">${item.name}</div><div class="text-xs text-gray-500">${item.date}</div></td><td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">¥${item.price.toLocaleString()}</td><td class="px-3 py-2 whitespace-nowrap text-right text-sm font-medium"><button class="text-red-600 hover:text-red-900" data-id="${item.id}">削除</button></td>`;
+                    
+                    let unitPriceText = '';
+                    if (item.normalizedUnitPrice) {
+                        unitPriceText = `(¥${item.normalizedUnitPrice.toFixed(1)}/${item.normalizedUnit})`;
+                    }
+
+                    const brandText = item.brand ? `<div class="text-xs text-gray-500">${item.brand}</div>` : '';
+
+                    row.innerHTML = `
+                        <td class="px-3 py-2 whitespace-nowrap">
+                            <div class="text-sm font-medium text-gray-900">${item.name}</div>
+                            ${brandText}
+                        </td>
+                        <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">
+                            <div>¥${item.price.toLocaleString()}</div>
+                            <div class="text-xs text-gray-500">${unitPriceText}</div>
+                        </td>
+                        <td class="px-3 py-2 whitespace-nowrap text-right text-sm font-medium">
+                            <button class="text-red-600 hover:text-red-900" data-id="${item.id}">削除</button>
+                        </td>`;
                     historyTable.appendChild(row);
                 });
                 historyTable.querySelectorAll('button').forEach(button => {
                     button.addEventListener('click', async (e) => {
-                        const idToDelete = e.target.dataset.id;
                         if (confirm('このデータを本当に削除しますか？')) {
-                            try {
-                                await deleteDoc(doc(db, "users", currentUserId, "items", idToDelete));
-                            } catch (error) {
-                                console.error("Error removing document: ", error);
-                                alert("データの削除に失敗しました。");
-                            }
+                            await deleteDoc(doc(db, "users", currentUserId, "items", e.target.dataset.id));
                         }
                     });
                 });
@@ -293,23 +295,31 @@
             
             const renderSummary = () => {
                 totalItemsEl.textContent = localItems.length;
-                const uniqueItemNames = new Set(localItems.map(item => item.name));
-                uniqueItemsEl.textContent = uniqueItemNames.size;
-                const totalSpending = localItems.reduce((sum, item) => sum + Number(item.price), 0);
-                totalSpendingEl.textContent = `¥${totalSpending.toLocaleString()}`;
+                uniqueItemsEl.textContent = new Set(localItems.map(item => item.name)).size;
+                totalSpendingEl.textContent = `¥${localItems.reduce((sum, item) => sum + Number(item.price), 0).toLocaleString()}`;
             };
 
+            // ★★★ 変更点: 最安値リストで銘柄も表示 ★★★
             const renderMinPriceList = () => {
                 minPriceListEl.innerHTML = '';
                 const uniqueItemNames = [...new Set(localItems.map(item => item.name))];
                 uniqueItemNames.forEach(name => {
                     if (!name) return;
-                    const itemsOfName = localItems.filter(item => item.name === name);
+                    const itemsOfName = localItems.filter(item => item.name === name && item.normalizedUnitPrice != null);
                     if (itemsOfName.length === 0) return;
-                    const minPriceItem = itemsOfName.reduce((min, item) => item.price < min.price ? item : min);
+
+                    const minPriceItem = itemsOfName.reduce((min, item) => item.normalizedUnitPrice < min.normalizedUnitPrice ? item : min);
+                    
+                    const brandText = minPriceItem.brand ? `(${minPriceItem.brand})` : '';
+
                     const el = document.createElement('div');
                     el.className = 'flex justify-between items-center bg-gray-50 p-2 rounded-md';
-                    el.innerHTML = `<div><p class="font-semibold text-gray-800">${name}</p><p class="text-xs text-gray-500">${minPriceItem.date} at ${minPriceItem.store || 'お店不明'}</p></div><p class="font-bold text-lg text-indigo-600">¥${minPriceItem.price.toLocaleString()}</p>`;
+                    el.innerHTML = `
+                        <div>
+                            <p class="font-semibold text-gray-800">${name} ${brandText}</p>
+                            <p class="text-xs text-gray-500">${minPriceItem.date} at ${minPriceItem.store || 'お店不明'} (${minPriceItem.quantity}${minPriceItem.unit || ''}で¥${minPriceItem.price})</p>
+                        </div>
+                        <p class="font-bold text-lg text-indigo-600">¥${minPriceItem.normalizedUnitPrice.toFixed(1)}<span class="text-sm font-normal">/${minPriceItem.normalizedUnit}</span></p>`;
                     minPriceListEl.appendChild(el);
                 });
             };
@@ -326,37 +336,101 @@
                 });
                 if (uniqueItemNames.includes(currentSelection)) {
                     itemSelect.value = currentSelection;
+                } else if (uniqueItemNames.length > 0) {
+                    itemSelect.value = uniqueItemNames[0];
                 }
             };
             
+            // ★★★ 変更点: グラフのツールチップで銘柄を表示 ★★★
             const renderChart = () => {
                 const selectedItemName = itemSelect.value;
                 if (chart) chart.destroy();
                 if (!selectedItemName) return;
-                const itemData = localItems.filter(item => item.name === selectedItemName).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+                const itemData = localItems
+                    .filter(item => item.name === selectedItemName && item.normalizedUnitPrice != null)
+                    .sort((a, b) => new Date(a.date) - new Date(b.date));
+                
+                if (itemData.length === 0) return;
+
                 const labels = itemData.map(item => item.date);
-                const data = itemData.map(item => item.price);
+                const data = itemData.map(item => item.normalizedUnitPrice);
+                const unit = itemData[0].normalizedUnit;
+
                 const ctx = document.getElementById('price-chart').getContext('2d');
-                chart = new Chart(ctx, { type: 'line', data: { labels: labels, datasets: [{ label: `${selectedItemName} の価格`, data: data, borderColor: 'rgb(79, 70, 229)', backgroundColor: 'rgba(79, 70, 229, 0.1)', fill: true, tension: 0.1 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: false, ticks: { callback: value => '¥' + value.toLocaleString() } } }, plugins: { tooltip: { callbacks: { label: context => `価格: ¥${context.parsed.y.toLocaleString()}` } } } } });
+                chart = new Chart(ctx, { 
+                    type: 'line', 
+                    data: { 
+                        labels: labels, 
+                        datasets: [{ 
+                            label: `${selectedItemName} の単価 (円/${unit})`, 
+                            data: data, 
+                            borderColor: 'rgb(79, 70, 229)', 
+                            backgroundColor: 'rgba(79, 70, 229, 0.1)', 
+                            fill: true, 
+                            tension: 0.1 
+                        }] 
+                    }, 
+                    options: { 
+                        responsive: true, 
+                        maintainAspectRatio: false, 
+                        scales: { y: { beginAtZero: false, ticks: { callback: value => '¥' + value.toLocaleString() } } }, 
+                        plugins: { 
+                            tooltip: { 
+                                callbacks: { 
+                                    label: context => {
+                                        const item = itemData[context.dataIndex];
+                                        const brandText = item.brand ? ` (${item.brand})` : '';
+                                        return `単価: ¥${context.parsed.y.toFixed(2).toLocaleString()}${brandText}`;
+                                    } 
+                                } 
+                            } 
+                        } 
+                    } 
+                });
             };
 
+            // ★★★ 変更点: フォーム送信時に銘柄も保存 ★★★
             itemForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                if (!currentUserId) {
-                    alert("ユーザー情報が取得できていません。少し待ってから再試行してください。");
-                    return;
+                if (!currentUserId) return;
+
+                const price = parseInt(priceInput.value);
+                const quantity = parseFloat(quantityInput.value) || 1;
+                const unit = unitInput.value.trim();
+                
+                let unitPrice = price / quantity;
+                let normalizedUnitPrice = unitPrice;
+                let normalizedUnit = unit || '個';
+
+                const unitLower = unit.toLowerCase();
+                if (unitLower === 'g' || unitLower === 'グラム') {
+                    normalizedUnitPrice = unitPrice * 100;
+                    normalizedUnit = '100g';
+                } else if (unitLower === 'ml' || unitLower === 'ミリリットル') {
+                    normalizedUnitPrice = unitPrice * 100;
+                    normalizedUnit = '100ml';
                 }
-                const newItem = { date: dateInput.value, name: itemNameInput.value.trim(), price: parseInt(priceInput.value), store: storeNameInput.value.trim(), createdAt: serverTimestamp() };
+
+                const newItem = { 
+                    date: dateInput.value, 
+                    name: itemNameInput.value.trim(), 
+                    brand: brandNameInput.value.trim(), // 銘柄を追加
+                    price: price,
+                    quantity: quantity,
+                    unit: unit,
+                    unitPrice: unitPrice,
+                    normalizedUnitPrice: normalizedUnitPrice,
+                    normalizedUnit: normalizedUnit,
+                    store: storeNameInput.value.trim(), 
+                    createdAt: serverTimestamp() 
+                };
+
                 if (newItem.name && !isNaN(newItem.price)) {
-                    try {
-                        const itemsCollectionRef = collection(db, "users", currentUserId, "items");
-                        await addDoc(itemsCollectionRef, newItem);
-                        itemForm.reset();
-                        dateInput.value = new Date().toISOString().split('T')[0];
-                    } catch (error) {
-                        console.error("Error adding document: ", error);
-                        alert("データの保存に失敗しました。");
-                    }
+                    await addDoc(collection(db, "users", currentUserId, "items"), newItem);
+                    itemForm.reset();
+                    quantityInput.value = '1';
+                    dateInput.value = new Date().toISOString().split('T')[0];
                 }
             });
 
@@ -366,17 +440,14 @@
                 if (currentUserId) {
                     myIdDisplay.textContent = currentUserId;
                     myIdDisplay.style.display = 'block';
-                } else {
-                    alert("ユーザーIDがまだ取得できていません。少し待ってからもう一度お試しください。");
                 }
             });
 
             syncBtn.addEventListener('click', () => {
                 const newId = syncIdInput.value.trim();
                 if (newId && newId.length > 20) {
-                    if (confirm(`現在のデバイスのデータは表示されなくなり、入力されたIDのデータに切り替わります。よろしいですか？\n\nID: ${newId}`)) {
+                    if (confirm(`現在のデータを破棄し、新しいIDと同期しますか？`)) {
                         localStorage.setItem('shoppingDashboardUserId', newId);
-                        alert("同期IDを設定しました。ページを再読み込みします。");
                         location.reload();
                     }
                 } else {
@@ -387,4 +458,5 @@
     </script>
 </body>
 </html>
+
 
