@@ -62,7 +62,6 @@
                         <label for="item-name" class="block text-sm font-medium text-gray-700">品目名（カテゴリ）</label>
                         <input type="text" id="item-name" placeholder="例: 食パン, 牛乳" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" required>
                     </div>
-                    <!-- ★★★ 変更点: 銘柄/詳細の入力欄を追加 ★★★ -->
                     <div>
                         <label for="brand-name" class="block text-sm font-medium text-gray-700">銘柄/詳細（任意）</label>
                         <input type="text" id="brand-name" placeholder="例: ロイヤルブレッド, おいしい牛乳" class="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
@@ -93,6 +92,13 @@
                 <hr class="my-6">
                 
                 <h2 class="text-xl font-bold mb-4 border-b pb-2">購入履歴</h2>
+                
+                <!-- ★★★ 検索ボックスを追加 ★★★ -->
+                <div class="mb-4">
+                    <label for="search-input" class="sr-only">履歴を検索</label>
+                    <input type="search" id="search-input" placeholder="品目名や銘柄で検索..." class="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                </div>
+                
                 <div class="h-64 overflow-y-auto">
                     <table class="min-w-full divide-y divide-gray-200">
                         <thead class="bg-gray-50">
@@ -193,7 +199,6 @@
             const itemForm = document.getElementById('item-form');
             const dateInput = document.getElementById('date');
             const itemNameInput = document.getElementById('item-name');
-            // ★★★ 変更点: 新しいUI要素を取得 ★★★
             const brandNameInput = document.getElementById('brand-name');
             const priceInput = document.getElementById('price');
             const quantityInput = document.getElementById('quantity');
@@ -205,6 +210,7 @@
             const uniqueItemsEl = document.getElementById('unique-items');
             const totalSpendingEl = document.getElementById('total-spending');
             const minPriceListEl = document.getElementById('min-price-list');
+            const searchInput = document.getElementById('search-input');
             
             const showIdBtn = document.getElementById('show-id-btn');
             const myIdDisplay = document.getElementById('my-id-display');
@@ -256,10 +262,18 @@
                 renderChart();
             };
 
-            // ★★★ 変更点: 履歴表示で銘柄も表示 ★★★
             const renderHistory = () => {
+                const searchTerm = searchInput.value.toLowerCase();
                 historyTable.innerHTML = '';
-                const recentItems = [...localItems].sort((a,b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+                
+                const filteredItems = localItems.filter(item => {
+                    const nameMatch = item.name.toLowerCase().includes(searchTerm);
+                    const brandMatch = item.brand && item.brand.toLowerCase().includes(searchTerm);
+                    return nameMatch || brandMatch;
+                });
+
+                const recentItems = [...filteredItems].sort((a,b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+                
                 recentItems.forEach((item) => {
                     const row = document.createElement('tr');
                     
@@ -284,6 +298,7 @@
                         </td>`;
                     historyTable.appendChild(row);
                 });
+
                 historyTable.querySelectorAll('button').forEach(button => {
                     button.addEventListener('click', async (e) => {
                         if (confirm('このデータを本当に削除しますか？')) {
@@ -299,7 +314,6 @@
                 totalSpendingEl.textContent = `¥${localItems.reduce((sum, item) => sum + Number(item.price), 0).toLocaleString()}`;
             };
 
-            // ★★★ 変更点: 最安値リストで銘柄も表示 ★★★
             const renderMinPriceList = () => {
                 minPriceListEl.innerHTML = '';
                 const uniqueItemNames = [...new Set(localItems.map(item => item.name))];
@@ -341,7 +355,6 @@
                 }
             };
             
-            // ★★★ 変更点: グラフのツールチップで銘柄を表示 ★★★
             const renderChart = () => {
                 const selectedItemName = itemSelect.value;
                 if (chart) chart.destroy();
@@ -390,7 +403,6 @@
                 });
             };
 
-            // ★★★ 変更点: フォーム送信時に銘柄も保存 ★★★
             itemForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
                 if (!currentUserId) return;
@@ -415,7 +427,7 @@
                 const newItem = { 
                     date: dateInput.value, 
                     name: itemNameInput.value.trim(), 
-                    brand: brandNameInput.value.trim(), // 銘柄を追加
+                    brand: brandNameInput.value.trim(),
                     price: price,
                     quantity: quantity,
                     unit: unit,
@@ -435,6 +447,8 @@
             });
 
             itemSelect.addEventListener('change', renderChart);
+            // ★★★ 検索ボックスのイベントリスナーを追加 ★★★
+            searchInput.addEventListener('input', renderHistory);
             
             showIdBtn.addEventListener('click', () => {
                 if (currentUserId) {
